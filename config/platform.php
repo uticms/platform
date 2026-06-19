@@ -4,7 +4,8 @@ return [
 
     'server_url' => rtrim(env('PLATFORM_SERVER_URL', 'https://uticms.ru'), '/'),
 
-    'server_public_key' => env('PLATFORM_SERVER_PUBLIC_KEY', ''),
+    // Prod trust anchor (uticms.ru). Override via PLATFORM_SERVER_PUBLIC_KEY for staging/regions.
+    'server_public_key' => env('PLATFORM_SERVER_PUBLIC_KEY', 'tzHYM0RhV1Kw5317xnn8Q7uzN75ZbckNWhrEzzqj8LU='),
 
     'server_public_key_previous' => env('PLATFORM_SERVER_PUBLIC_KEY_PREVIOUS'),
 
