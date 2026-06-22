@@ -141,7 +141,9 @@ final class SyncService
         $code = $result->errorCode ?? '';
 
         match ($code) {
-            'installation_revoked', 'license_revoked' => $this->trustStore->markInstallationRevoked($result->errorMessage),
+            'installation_not_found', 'installation_revoked', 'license_revoked', 'license_not_found' => $this->trustStore->markInstallationRevoked(
+                $result->errorMessage ?? 'Installation is no longer valid on the license server.',
+            ),
             'license_banned', 'installation_banned' => $this->trustStore->markInstallationBanned(
                 ['ban_reason' => $result->errorMessage],
                 $result->errorMessage,
