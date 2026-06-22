@@ -153,24 +153,7 @@ final class SyncService
                     ['updates_allowed' => false],
                 ),
             ]),
-            default => null,  
+            default => null,
         };
-
-        if ($code === 'api_error') {
-            $this->applyEnforcementFromMessage($result->errorMessage);
-        }
-    }
-
-    private function applyEnforcementFromMessage(?string $message): void 
-    {
-        if ($message === null || $message === '') {
-            return;
-        }
-
-        $normalized = strtolower($message);
-
-        if (str_contains($normalized, 'revoked') || str_contains($normalized, 'отозван')) {
-            $this->trustStore->markInstallationRevoked($message);
-        }
-    }
+    } 
 }

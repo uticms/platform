@@ -4,15 +4,18 @@ namespace Uticms\Platform\Services;
 
 use Illuminate\Support\Carbon;
 use Uticms\Platform\Exceptions\PlatformException;
+use Uticms\Platform\Support\PlatformLocalState;
 
 final class CapabilityGuard
-{
+{ 
     public function __construct(
         private readonly TrustStore $trustStore,
     ) {}
 
     public function assertCanInstall(string $moduleName): void
     {
+        $this->assertNotRevoked();
+
         if (! $this->canUse($this->productCode($moduleName))) {
             throw new PlatformException(
                 "Module [{$moduleName}] is not available for this installation.",
@@ -23,6 +26,10 @@ final class CapabilityGuard
 
     public function canUse(string $productCode): bool
     {
+        if ($this->trustStore->resolveLocalState() === PlatformLocalState::Revoked) {
+            return false;
+        }
+
         if ($this->trustStore->isBanned()) {
             return false;
         }
@@ -37,7 +44,11 @@ final class CapabilityGuard
     }
 
     public function canUpdate(string $productCode): bool
-    {
+    { 
+        if ($this->trustStore->resolveLocalState() === PlatformLocalState::Revoked) {
+            return false;
+        }
+
         if ($this->trustStore->isBanned()) {
             return false;
         }
@@ -74,6 +85,16 @@ final class CapabilityGuard
     public function isBanned(): bool
     {
         return $this->trustStore->isBanned();
+    }
+
+    private function assertNotRevoked(): void
+    {
+        if ($this->trustStore->resolveLocalState() === PlatformLocalState::Revoked) {
+            throw new PlatformException(
+                'Installation is revoked on the license server.',
+                'installation_revoked',
+            );
+        }
     }
 
     private function productCode(string $moduleName): string

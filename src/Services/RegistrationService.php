@@ -7,9 +7,10 @@ use Uticms\Platform\Exceptions\PlatformException;
 use Uticms\Platform\Http\PlatformApiClient;
 use Uticms\Platform\Support\DomainNormalizer;
 use Uticms\Platform\Support\FingerprintGenerator;
+use Uticms\Platform\Support\PlatformLocalState;
 use Uticms\Platform\Support\PlatformResult;
 
-final class RegistrationService
+final class RegistrationService 
 {
     public function __construct(
         private readonly InstanceKeyStore $keys,
@@ -18,12 +19,23 @@ final class RegistrationService
         private readonly PlatformApiClient $api,
     ) {}
 
-    public function register(?string $registrationKey = null, ?string $domain = null): void
+    public function register(?string $registrationKey = null, ?string $domain = null, bool $force = false): void
     {
         $registrationKey ??= (string) config('platform.registration_key');
 
         if (trim($registrationKey) === '') {
             throw new PlatformException('PLATFORM_KEY is not configured.', 'missing_registration_key');
+        }
+
+        if (! $force) {
+            $localState = $this->trustStore->resolveLocalState();
+
+            if (in_array($localState, [PlatformLocalState::Active, PlatformLocalState::Grace], true)) {
+                throw new PlatformException(
+                    'Installation is already registered. Use --force to re-run registration.',
+                    'already_registered',
+                );
+            }
         }
 
         $this->keys->ensureKeyPair();
@@ -89,11 +101,13 @@ final class RegistrationService
 
         $this->saveCertificate($certificate);
 
-        $this->trustStore->mergeState([ 
+        $this->trustStore->mergeState([
             'installation_status' => 'active',
             'revoke_reason' => null,
             'ban_reason' => null,
         ]);
+
+        $this->trustStore->recordSuccessfulSync();
     }
 
     private function saveCertificate(string $jwt): void

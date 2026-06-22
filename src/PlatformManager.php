@@ -27,9 +27,9 @@ final class PlatformManager
         $this->syncService->runOnce($force);
     }
 
-    public function register(?string $key = null, ?string $domain = null): void
+    public function register(?string $key = null, ?string $domain = null, bool $force = false): void 
     {
-        $this->registrationService->register($key, $domain);
+        $this->registrationService->register($key, $domain, $force);
     }
 
     public function guard(): CapabilityGuard
