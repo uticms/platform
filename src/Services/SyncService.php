@@ -75,6 +75,8 @@ final class SyncService
         }
 
         if (! $result->ok) {
+            $this->applyEnforcementFromApiError($result);
+
             Log::warning('platform:sync api error', [
                 'code' => $result->errorCode,
                 'message' => $result->errorMessage,
@@ -85,10 +87,19 @@ final class SyncService
 
         /** @var array<string, mixed> $data */
         $data = $result->data ?? [];
+        $installationStatus = is_string($data['installation_status'] ?? null) ? $data['installation_status'] : null;
         $flags = is_array($data['flags'] ?? null) ? $data['flags'] : [];
 
-        if (($flags['banned'] ?? false) === true) {
-            $this->trustStore->mergeState(['flags' => $flags]);
+        if ($installationStatus === 'revoked') {
+            $reason = is_string($data['revoke_reason'] ?? null) ? $data['revoke_reason'] : null;
+            $this->trustStore->markInstallationRevoked($reason);
+
+            return $result;
+        }
+
+        if ($installationStatus === 'banned' || ($flags['banned'] ?? false) === true) {
+            $reason = is_string($flags['ban_reason'] ?? null) ? $flags['ban_reason'] : null;
+            $this->trustStore->markInstallationBanned($flags, $reason);
 
             return $result;
         }
@@ -123,5 +134,43 @@ final class SyncService
         $expiresAt = Carbon::createFromTimestampUTC($claims->exp);
 
         return now()->addDays($renewBeforeDays)->greaterThanOrEqualTo($expiresAt);
+    }
+
+    private function applyEnforcementFromApiError(PlatformResult $result): void
+    { 
+        $code = $result->errorCode ?? '';
+
+        match ($code) {
+            'installation_revoked', 'license_revoked' => $this->trustStore->markInstallationRevoked($result->errorMessage),
+            'license_banned', 'installation_banned' => $this->trustStore->markInstallationBanned(
+                ['ban_reason' => $result->errorMessage],
+                $result->errorMessage,
+            ),
+            'license_suspended' => $this->trustStore->mergeState([
+                'installation_status' => 'suspended',
+                'flags' => array_merge(
+                    is_array($this->trustStore->state()['flags'] ?? null) ? $this->trustStore->state()['flags'] : [],
+                    ['updates_allowed' => false],
+                ),
+            ]),
+            default => null,  
+        };
+
+        if ($code === 'api_error') {
+            $this->applyEnforcementFromMessage($result->errorMessage);
+        }
+    }
+
+    private function applyEnforcementFromMessage(?string $message): void 
+    {
+        if ($message === null || $message === '') {
+            return;
+        }
+
+        $normalized = strtolower($message);
+
+        if (str_contains($normalized, 'revoked') || str_contains($normalized, 'отозван')) {
+            $this->trustStore->markInstallationRevoked($message);
+        }
     }
 }

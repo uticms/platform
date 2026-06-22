@@ -1,71 +1,60 @@
 # uticms/platform
 
-Laravel-пакет для **self-hosted CMS** (не для uticms.ru): registration, sync, entitlements, updates **client**.
+Laravel-пакет для **self-hosted UTICMS CMS**: registration, sync, entitlements, updates (client SDK).
 
-**License server** — отдельно: uticms.ru (`app/Services/License/`, API). Этот пакет только **вызывает** API и применяет ответы локально.
+License server — **uticms.ru** (отдельный продукт). Этот пакет только вызывает API и применяет ответы локально.
 
-Документация server: `../../docs/license-service/` (контракт).  
-Документация client: [14-cms-platform.md](../../docs/license-service/14-cms-platform.md).
+## Установка
 
-## Установка в CMS
-
-```json
-{
-  "repositories": [
-    { "type": "path", "url": "../devs/platform" }
-  ],
-  "require": {
-    "uticms/platform": "@dev"
-  }
-}
-```
 
 ```bash
-composer require uticms/platform 
+composer require uticms/platform
 ```
 
-`PlatformServiceProvider` подключается **автоматически** (package discovery, см. `extra.laravel` в `composer.json`).
+`PlatformServiceProvider` подключается **автоматически** (Laravel package discovery).
 
-## Что клиент вводит сам vs что platform делает сам
-
-| | Кто | Куда |
-|---|-----|------|
-| **`PLATFORM_KEY`** (`U-…`) | **Клиент** — ключ из ЛК / email после покупки | `.env` или `platform:register --key=…` |
-| **`PLATFORM_SERVER_PUBLIC_KEY`** | **Никто** — уже в `config/platform.php` dist | default в config, `.env` не нужен |
-| **`PLATFORM_SERVER_URL`** | **Никто** (prod) | default `https://uticms.ru` |
-| Instance keys (Ed25519) | **Platform** при первом `register` | `storage/app/platform/instance.key` + `.pub` |
-| Certificate JWT | **Platform** после `register` / `sync` | `storage/app/platform/certificate.jwt` |
-| installation_id, flags | **Platform** | `storage/app/platform/state.json` |
-
-Platform **не пишет в `.env`** после регистрации — только в `storage/app/platform/`.  
-В `.env` клиента для prod обычно **одна строка**: `PLATFORM_KEY=U-…`.
-
-## .env (CMS, минимум для prod)
+## .env клиента (минимум для prod)
 
 ```env
-PLATFORM_KEY=U-XXXX-XXXX-XXXX-XXXX
-```
+PLATFORM_KEY=U-XXXX-XXXX-XXXX-XXXX 
+``` 
 
-Опционально (dev / staging / другой регион):
+| Переменная | Кто заполняет |
+|------------|---------------|
+| `PLATFORM_KEY` | **Клиент** — ключ после покупки |
+| `PLATFORM_SERVER_PUBLIC_KEY` | **Никто** — default в `config/platform.php` |
+| `PLATFORM_SERVER_URL` | **Никто** (prod) — default `https://uticms.ru` |
+| Instance keys, certificate, state | **Platform** → `storage/app/platform/` |
+
+Platform **не пишет в `.env`** после регистрации.
+
+Опционально (dev / staging):
 
 ```env
 PLATFORM_SERVER_URL=https://staging.uticms.ru
-PLATFORM_SERVER_PUBLIC_KEY=…   # override встроенного default
+PLATFORM_SERVER_PUBLIC_KEY=…
 ```
 
 ## Команды
 
 ```bash
-php artisan platform:register          # или --key=U-… --domain=shop.example.com
+php artisan platform:register
 php artisan platform:sync
 php artisan platform:status
 ```
 
+`--key=U-…` и `--domain=shop.example.com` — если нужно явно указать ключ или домен (не из `APP_URL`).
+
 ## Storage
 
-`storage/app/platform/` — instance keys, certificate JWT, state.json
+```
+storage/app/platform/
+├── instance.key / instance.pub
+├── certificate.jwt
+└── state.json
+```
 
-## Разработка
+## Разработка пакета
 
 ```bash
 composer install

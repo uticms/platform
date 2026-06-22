@@ -9,11 +9,15 @@ final class ServerSignatureVerifier
      */
     public function verify(array $payload, string $signatureBase64, string $publicKeyBase64): bool
     {
-        ksort($payload);
+        $canonical = $this->canonicalize($payload);
 
-        $message = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
+        foreach ($this->payloadHashes($canonical) as $message) {
+            if (Ed25519::verify($message, $signatureBase64, $publicKeyBase64)) {
+                return true;
+            } 
+        }
 
-        return Ed25519::verify($message, $signatureBase64, $publicKeyBase64);
+        return false;
     }
 
     /**
@@ -37,5 +41,38 @@ final class ServerSignatureVerifier
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $payload
+     * @return array<string|int, mixed>
+     */
+    private function canonicalize(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $payload[$key] = $this->canonicalize($value);
+            }
+        }
+
+        if (! array_is_list($payload)) {
+            ksort($payload);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $canonical
+     * @return list<string>
+     */
+    private function payloadHashes(array $canonical): array
+    {
+        $hashes = [
+            hash('sha256', json_encode($canonical, JSON_THROW_ON_ERROR)),
+            hash('sha256', json_encode($canonical, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+        ];
+
+        return array_values(array_unique($hashes));
     }
 }

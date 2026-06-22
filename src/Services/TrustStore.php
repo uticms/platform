@@ -190,6 +190,16 @@ final class TrustStore
 
     public function resolveLocalState(?CertificateClaims $claims = null): PlatformLocalState
     {
+        $state = $this->state();
+
+        if (($state['installation_status'] ?? null) === 'revoked') {
+            return PlatformLocalState::Revoked;
+        }
+
+        if (($state['flags']['banned'] ?? false) === true) {
+            return PlatformLocalState::Banned;
+        }
+
         try {
             $claims ??= $this->parseCertificate();
         } catch (RuntimeException) {
@@ -219,6 +229,10 @@ final class TrustStore
     {
         $state = $this->state();
 
+        if (($state['installation_status'] ?? null) === 'revoked') {
+            return false;
+        }
+
         if (($state['flags']['banned'] ?? false) === true) {
             return true;
         }
@@ -228,6 +242,48 @@ final class TrustStore
         } catch (RuntimeException) {
             return false;
         }
+    }
+
+    public function markInstallationRevoked(?string $reason = null): void
+    {
+        $this->clearCertificate();
+
+        $this->mergeState([
+            'installation_status' => 'revoked',
+            'revoke_reason' => $reason,
+            'flags' => array_merge(
+                is_array($this->state()['flags'] ?? null) ? $this->state()['flags'] : [],
+                ['updates_allowed' => false, 'support_allowed' => false],
+            ),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $flags
+     */
+    public function markInstallationBanned(array $flags, ?string $reason = null): void
+    {
+        $flags['banned'] = true;
+
+        $this->mergeState([
+            'installation_status' => 'banned',
+            'ban_reason' => $reason ?? (is_string($flags['ban_reason'] ?? null) ? $flags['ban_reason'] : null),
+            'flags' => $flags,
+        ]);
+    }
+
+    private function clearCertificate(): void
+    {
+        $path = $this->certificatePath();
+
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+
+        $this->mergeState([
+            'certificate_jti' => null,
+            'certificate_expires_at' => null,
+        ]);
     }
 
     public function installationId(): ?string

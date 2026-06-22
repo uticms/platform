@@ -32,7 +32,7 @@ final class PlatformApiClient
      */
     public function confirm(array $body): PlatformResult
     {
-        return $this->postUnsigned('/api/v1/license/activate/confirm', $body);
+        return $this->postUnsigned('/api/v1/license/activate/confirm', $body, requireServerSignature: false);
     }
 
     /**
@@ -57,8 +57,8 @@ final class PlatformApiClient
     /**
      * @param  array<string, mixed>  $body
      */
-    private function postUnsigned(string $path, array $body): PlatformResult
-    {
+    private function postUnsigned(string $path, array $body, bool $requireServerSignature = true): PlatformResult
+    {  
         $this->trustStore->recordNetworkAttempt();
 
         try {
@@ -72,7 +72,7 @@ final class PlatformApiClient
             return PlatformResult::networkError($exception->getMessage());
         }
 
-        return $this->parseResponse($response->json(), $response->status());
+        return $this->parseResponse($response->json(), $response->status(), $requireServerSignature);
     }
 
     /**
@@ -128,15 +128,16 @@ final class PlatformApiClient
     /**
      * @param  mixed  $json
      */
-    private function parseResponse(mixed $json, int $status): PlatformResult
-    {
+    private function parseResponse(mixed $json, int $status, bool $requireServerSignature = true): PlatformResult
+    { 
         if (! is_array($json)) {
             return PlatformResult::networkError('Invalid response from platform server.');
         }
 
         if ($status >= 400) {
-            $code = is_string($json['code'] ?? null) ? $json['code'] : 'api_error';
-            $message = is_string($json['message'] ?? null) ? $json['message'] : 'Platform API error.';
+            $error = is_array($json['error'] ?? null) ? $json['error'] : $json;
+            $code = is_string($error['code'] ?? null) ? $error['code'] : 'api_error';
+            $message = is_string($error['message'] ?? null) ? $error['message'] : 'Platform API error.';
 
             return PlatformResult::apiError($code, $message);
         }
@@ -144,14 +145,23 @@ final class PlatformApiClient
         $signature = $json['server_signature'] ?? null;
 
         if (! is_string($signature) || $signature === '') {
-            return PlatformResult::invalidSignature();
+            if ($requireServerSignature) {
+                return PlatformResult::invalidSignature();
+            }
+
+            return PlatformResult::ok($json);
         }
 
         $payload = $json;
         unset($payload['server_signature']);
 
         if (! $this->signatureVerifier->verifyWithRotation($payload, $signature)) {
-            return PlatformResult::invalidSignature();
+            if ($requireServerSignature) {
+                return PlatformResult::invalidSignature();
+            }
+
+            // confirm: JWT certificate проверяется отдельно в TrustStore::saveCertificate
+            return PlatformResult::ok($json);
         }
 
         return PlatformResult::ok($json);

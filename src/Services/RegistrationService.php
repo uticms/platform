@@ -63,13 +63,13 @@ final class RegistrationService
             'installation_id' => $installationId,
             'domain' => $domain,
             'fingerprint' => $fingerprint,
+            'installation_status' => 'pending',
+            'revoke_reason' => null,  
+            'ban_reason' => null,
         ]);
 
-        if (isset($data['certificate']) && is_string($data['certificate']) && $data['certificate'] !== '') {
-            $this->saveCertificate($data['certificate']);
-        }
 
-        $confirmSignature = $this->keys->signMessage($nonceServer.$installationId);
+        $confirmSignature = $this->keys->signMessage($nonceServer.$installationId); 
 
         $confirmResult = $this->api->confirm([
             'installation_id' => $installationId,
@@ -88,7 +88,12 @@ final class RegistrationService
         }
 
         $this->saveCertificate($certificate);
-        $this->trustStore->recordSuccessfulSync();
+
+        $this->trustStore->mergeState([ 
+            'installation_status' => 'active',
+            'revoke_reason' => null,
+            'ban_reason' => null,
+        ]);
     }
 
     private function saveCertificate(string $jwt): void
